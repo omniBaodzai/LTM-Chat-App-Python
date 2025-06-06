@@ -1,0 +1,86 @@
+[SYSTEM] Uyen has joined the chat.
+[SYSTEM] Uyen has left the chat.
+[SYSTEM] huy has joined the chat.
+[SYSTEM] kieu has joined the chat.
+[SYSTEM] kieu has left the chat.
+[SYSTEM] huy has left the chat.
+[SYSTEM] hy has joined the chat.
+[SYSTEM] hy has left the chat.
+[SYSTEM] Huy has joined the chat.
+[SYSTEM] nguyen has joined the chat.
+Huy: hello
+[SYSTEM] nguyen has left the chat.
+Huy: heee
+[SYSTEM] Bao has joined the chat.
+[SYSTEM] Nguyen has joined the chat.
+Bao: Hello
+[SYSTEM] Huy has joined the chat.
+Bao: Chan qua
+Huy: Cac ban muon di choi hong
+[SYSTEM] Huy has left the chat.
+[SYSTEM] Nguyen has left the chat.
+[SYSTEM] Bao has left the chat.
+[SYSTEM] Huy has joined the chat.
+[SYSTEM] Bao has joined the chat.
+Huy: Hello
+Bao: Cccc
+[SYSTEM] Bao has left the chat.
+[SYSTEM] Bao has joined the chat.
+[SYSTEM] Huy has left the chat.
+[SYSTEM] Bao has left the chat.
+[SYSTEM] Huy has joined the chat.
+[SYSTEM] Huy has left the chat.
+[SYSTEM] Huy has joined the chat.
+[SYSTEM] Bao has joined the chat.
+[SYSTEM] Huy has left the chat.
+[SYSTEM] Bao has left the chat.
+[SYSTEM] Huy has joined the chat.
+[SYSTEM] Huy has left the chat.
+[SYSTEM] f has joined the chat.
+[SYSTEM] f has left the chat.
+[SYSTEM] f has joined the chat.
+[SYSTEM] f has left the chat.
+[SYSTEM] f has joined the chat.
+f: Hello
+[SYSTEM] g has joined the chat.
+[SYSTEM] f has left the chat.
+[SYSTEM] h has joined the chat.
+[SYSTEM] g has left the chat.
+[SYSTEM] s has joined the chat.
+s: hello
+h: chán
+[SYSTEM] h has left the chat.
+[SYSTEM] s has left the chat.
+[SYSTEM] j has joined the chat.
+[SYSTEM] s has joined the chat.
+j: Hello
+[SYSTEM] s has left the chat.
+[SYSTEM] d has joined the chat.
+d: hello
+j: kh
+d: chán]
+j: hazzz
+[SYSTEM] j has left the chat.
+[SYSTEM] d has left the chat.
+[SYSTEM] h has joined the chat.
+[SYSTEM] f has joined the chat.
+f: H
+h: c
+h: sdcdsc
+f: dscsdccds
+h: sdcdscddd
+[SYSTEM] f has left the chat.
+[SYSTEM] h has left the chat.
+[SYSTEM] f has joined the chat.
+f: d
+[SYSTEM] f has left the chat.
+[SYSTEM] g has joined the chat.
+[SYSTEM] j has joined the chat.
+g: hello
+j: chào
+[SYSTEM] g has left the chat.
+[SYSTEM] j has left the chat.
+[SYSTEM] s has joined the chat.
+[SYSTEM] e has joined the chat.
+s: g
+e: f
