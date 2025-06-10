@@ -12,7 +12,6 @@
 ## Cách chạy
 ### Chạy Server
 1. Mở terminal và di chuyển đến thư mục `chat_app`:
-cd chat_app
    ```bash
    cd d:\LTM\app\LTM-Chat-App-Python\chat_app
    ```
