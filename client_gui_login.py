@@ -1,3 +1,4 @@
+
 import socket
 import threading
 import tkinter as tk
@@ -5,40 +6,79 @@ from tkinter import scrolledtext, simpledialog, messagebox
 import queue # Để truyền tin nhắn từ luồng mạng sang luồng GUI
 
 # --- Cấu hình ---
-SERVER_IP = '127.0.0.1' # Thường dùng 127.0.0.1 để test trên cùng máy, sau đó đổi thành IP của server trong LAN
+SERVER_IP = '127.0.0.1'
 SERVER_PORT = 12345
 BUFFER_SIZE = 1024
 
-MY_USERNAME = ""
-client_socket = None # Socket client toàn cục
-receive_running = True # Biến cờ để kiểm soát luồng nhận
+MY_USERNAME = "chataap"
+user_action = "REGISTER"  # LOGIN hoặc REGISTER
+password = "bangbang"     # Lưu mật khẩu người dùng nhập
 
-# --- Hàng đợi để giao tiếp giữa luồng mạng và luồng GUI ---
+client_socket = None
+receive_running = True
 message_queue = queue.Queue()
+
+def get_user_credentials():
+    global MY_USERNAME, user_action, password
+
+    def submit():
+        nonlocal login_win
+        uname = username_entry.get().strip()
+        pwd = password_entry.get().strip()
+        act = action_var.get()
+
+        if not uname or not pwd:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ tên và mật khẩu.")
+            return
+
+        MY_USERNAME = uname
+        password = pwd
+        user_action = act
+        login_win.destroy()
+
+    login_win = tk.Toplevel()
+    login_win.title("Đăng nhập / Đăng ký")
+    login_win.geometry("300x200")
+    login_win.grab_set()
+
+    tk.Label(login_win, text="Tên người dùng:").pack(pady=5)
+    username_entry = tk.Entry(login_win)
+    username_entry.pack()
+
+    tk.Label(login_win, text="Mật khẩu:").pack(pady=5)
+    password_entry = tk.Entry(login_win, show='*')
+    password_entry.pack()
+
+    action_var = tk.StringVar(value="REGISTER")
+    tk.Radiobutton(login_win, text="Đăng nhập", variable=action_var, value="LOGIN").pack()
+    tk.Radiobutton(login_win, text="Đăng ký", variable=action_var, value="REGISTER").pack()
+
+    tk.Button(login_win, text="Xác nhận", command=submit).pack(pady=10)
+
+    login_win.wait_window()
+
+    if not MY_USERNAME:
+        messagebox.showerror("Hủy", "Bạn chưa đăng nhập/đăng ký.")
+        exit()
 
 class ChatClientApp:
     def __init__(self, master):
         self.master = master
-        master.title("LAN Chat Client") # Tên mặc định, sẽ cập nhật sau
+        master.title("LAN Chat Client")
         master.geometry("500x450")
         master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.create_widgets()
-        self.master.after(100, self.process_queue) # Bắt đầu kiểm tra hàng đợi tin nhắn
+        self.master.after(100, self.process_queue)
 
-        # Yêu cầu tên người dùng khi khởi động
-        self.get_initial_username()
-
-        # Cố gắng kết nối tới server
+        get_user_credentials()
         self.connect_to_server()
 
     def create_widgets(self):
-        # Khung hiển thị tin nhắn
         self.chat_history = scrolledtext.ScrolledText(self.master, wrap=tk.WORD, state='disabled', font=("Arial", 10))
         self.chat_history.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-        self.chat_history.tag_config('self_message', foreground='blue') # Màu xanh cho tin nhắn của mình
+        self.chat_history.tag_config('self_message', foreground='blue')
 
-        # Khung nhập tin nhắn
         self.message_frame = tk.Frame(self.master)
         self.message_frame.pack(padx=10, pady=(0, 10), fill=tk.X)
 
@@ -49,49 +89,40 @@ class ChatClientApp:
         self.send_button = tk.Button(self.message_frame, text="Gửi", command=self.send_message)
         self.send_button.pack(side=tk.RIGHT, padx=5)
 
-    def get_initial_username(self):
-        global MY_USERNAME
-        MY_USERNAME = simpledialog.askstring("Chào mừng!", "Nhập tên của bạn:")
-        while not MY_USERNAME or not MY_USERNAME.strip():
-            messagebox.showwarning("Lỗi", "Tên không được để trống!")
-            MY_USERNAME = simpledialog.askstring("Chào mừng!", "Nhập tên của bạn:")
-        MY_USERNAME = MY_USERNAME.strip()
-        self.master.title(f"LAN Chat Client - {MY_USERNAME}")
-
     def connect_to_server(self):
-        global client_socket
+        global client_socket, user_action, password, MY_USERNAME
         try:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_socket.connect((SERVER_IP, SERVER_PORT))
             print(f"Đã kết nối tới server {SERVER_IP}:{SERVER_PORT}")
-            # Gửi tên người dùng cho server ngay sau khi kết nối
-            client_socket.send(f"USERNAME:{MY_USERNAME}".encode('utf-8'))
 
-            # Bắt đầu luồng nhận tin nhắn từ server
+            msg_to_send = f"{user_action}:{MY_USERNAME}:{password}"
+            print(f"[DEBUG] Gửi tới server: {msg_to_send}")
+            client_socket.send(msg_to_send.encode("utf-8"))
+
             threading.Thread(target=self.receive_messages_from_server, daemon=True).start()
         except Exception as e:
             messagebox.showerror("Lỗi kết nối", f"Không thể kết nối tới server: {e}\nĐảm bảo server đang chạy!")
-            self.master.destroy() # Đóng ứng dụng nếu không kết nối được
+            self.master.destroy()
 
     def receive_messages_from_server(self):
-        """Hàm nhận tin nhắn từ server, chạy trong luồng riêng."""
         global receive_running
         while receive_running:
             try:
                 message = client_socket.recv(BUFFER_SIZE).decode('utf-8')
-                if not message: # Server đóng kết nối
+                if not message:
                     message_queue.put("[SYSTEM]:Server đã đóng kết nối.")
                     break
                 message_queue.put(message)
-            except OSError as e: # Socket đã bị đóng
-                if receive_running: # Chỉ in lỗi nếu chưa cố ý đóng
+            except OSError as e:
+                if receive_running:
                     print(f"Lỗi nhận tin nhắn (có thể do socket đóng): {e}")
                 break
             except Exception as e:
                 print(f"Lỗi không xác định khi nhận: {e}")
                 break
         print("Luồng nhận tin nhắn đã dừng.")
-        client_socket.close() # Đóng socket khi luồng dừng
+        client_socket.close()
 
     def send_message_event(self, event=None):
         self.send_message()
@@ -99,10 +130,8 @@ class ChatClientApp:
     def send_message(self):
         msg_content = self.message_entry.get()
         if msg_content.strip():
-            # Hiển thị tin nhắn của chính mình ngay lập tức
             self.display_message(f"[{MY_USERNAME}]: {msg_content}", is_self=True)
             try:
-                # Gửi tin nhắn đến server (không cần thêm username vào đây, server sẽ biết)
                 client_socket.send(msg_content.encode('utf-8'))
             except Exception as e:
                 messagebox.showerror("Lỗi gửi tin", f"Không thể gửi tin nhắn: {e}")
@@ -119,12 +148,9 @@ class ChatClientApp:
         self.chat_history.yview(tk.END)
 
     def process_queue(self):
-        """Kiểm tra hàng đợi tin nhắn và hiển thị lên GUI."""
         try:
             while True:
                 message = message_queue.get_nowait()
-                # Server sẽ gửi lại tin nhắn đã định dạng đầy đủ bao gồm tên người gửi
-                # Nên không cần MY_USERNAME in message ở đây
                 self.display_message(message)
         except queue.Empty:
             pass
@@ -132,19 +158,16 @@ class ChatClientApp:
             self.master.after(100, self.process_queue)
 
     def on_closing(self):
-        """Xử lý khi đóng cửa sổ GUI."""
         global receive_running
         if messagebox.askokcancel("Thoát ứng dụng", "Bạn có muốn thoát ứng dụng chat không?"):
-            receive_running = False # Dừng luồng nhận
+            receive_running = False
             try:
                 if client_socket:
-                    # Gửi một tin nhắn đặc biệt hoặc đóng socket để báo server client ngắt kết nối
-                    client_socket.shutdown(socket.SHUT_RDWR) # Tắt cả gửi và nhận
+                    client_socket.shutdown(socket.SHUT_RDWR)
                     client_socket.close()
             except OSError as e:
                 print(f"Lỗi khi đóng socket: {e}")
-            
-            self.master.destroy() # Đóng cửa sổ GUI
+            self.master.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()

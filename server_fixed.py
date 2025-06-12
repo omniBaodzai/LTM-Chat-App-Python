@@ -1,6 +1,9 @@
 import socket
 import threading
-import time # Import time để có thể thêm dấu thời gian vào tin nhắn nếu cần
+import time
+import mysql.connector
+import hashlib
+ # Import time để có thể thêm dấu thời gian vào tin nhắn nếu cần
 
 # --- Cấu hình Server ---
 SERVER_IP = '0.0.0.0'
@@ -28,32 +31,46 @@ def broadcast(message, sender_conn=None):
 
 
 def handle_client(conn, addr):
-    """
-    Xử lý kết nối từ một client riêng biệt.
-    """
     client_info = {'socket': conn, 'address': addr, 'username': 'unknown'}
     connected_clients.append(client_info)
-    print(f"📲 Client {addr} connected.")
 
     try:
-        # Bước 1: Nhận username từ client
-        username_msg = conn.recv(BUFFER_SIZE).decode('utf-8')
-        if username_msg.startswith("USERNAME:"):
-            client_info['username'] = username_msg.split("USERNAME:", 1)[1].strip()
-            print(f"Client {addr} đã xác định tên: {client_info['username']}")
-            # Thông báo cho tất cả mọi người có người mới tham gia
-            broadcast(f"[SERVER]: {client_info['username']} đã tham gia chat.".encode('utf-8'))
-        else:
-            print(f"Client {addr} không gửi username. Gán tên mặc định.")
-            client_info['username'] = f"Guest_{addr[1]}" # Tên mặc định
+        # Nhận yêu cầu từ client (LOGIN: hoặc REGISTER:)
+        auth_msg = conn.recv(BUFFER_SIZE).decode('utf-8')
 
-        # Bước 2: Xử lý các tin nhắn chat từ client
+        if auth_msg.startswith("REGISTER:"):
+            _, username, password = auth_msg.split(":", 2)
+            if register_user(username, password):
+                conn.send("[SERVER]: Đăng ký thành công.".encode('utf-8'))
+            else:
+                conn.send("[SERVER]: Tên đã tồn tại. Đăng ký thất bại.".encode('utf-8'))
+                conn.close()
+                return
+
+        elif auth_msg.startswith("LOGIN:"):
+            _, username, password = auth_msg.split(":", 2)
+            if authenticate_user(username, password):
+                conn.send("[SERVER]: Đăng nhập thành công.".encode('utf-8'))
+                
+            else:
+                conn.send("[SERVER]: Sai tên hoặc mật khẩu.".encode('utf-8'))
+                conn.close()
+                return
+
+        else:
+            conn.send("[SERVER]: Yêu cầu không hợp lệ.".encode('utf-8'))
+            conn.close()
+            return
+
+        client_info['username'] = username
+        print(f"✅ {username} đã đăng nhập thành công từ {addr}")
+        broadcast(f"[SERVER]: {username} đã tham gia chat.".encode('utf-8'))
+
         while True:
             msg = conn.recv(BUFFER_SIZE)
-            if not msg: # Client ngắt kết nối
+            if not msg:
                 break
-            
-            # Format tin nhắn trước khi broadcast
+
             timestamp = time.strftime("%H:%M:%S", time.localtime())
             full_msg = f"[{timestamp}] [{client_info['username']}]: {msg.decode('utf-8')}".encode('utf-8')
             print(f"Nhận từ {client_info['username']} ({addr}): {msg.decode('utf-8')}")
@@ -64,12 +81,10 @@ def handle_client(conn, addr):
     except Exception as e:
         print(f"Lỗi khi xử lý client {client_info['username']} ({addr}): {e}")
     finally:
-        # Khi client ngắt kết nối hoặc gặp lỗi
         print(f"❌ Client {client_info['username']} ({addr}) đã ngắt kết nối.")
         broadcast(f"[SERVER]: {client_info['username']} đã rời khỏi chat.".encode('utf-8'))
         remove_client(client_info)
         conn.close()
-
 def remove_client(client_info):
     """Hàm loại bỏ client khỏi danh sách."""
     if client_info in connected_clients:
@@ -117,3 +132,40 @@ def start_server():
 
 if __name__ == "__main__":
     start_server()
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="bangbang",
+        database="chatapp"
+    )
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def register_user(username, password):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, hash_password(password)))
+        conn.commit()
+        return True
+    except mysql.connector.IntegrityError:
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def authenticate_user(username, password):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+        result = cur.fetchone()
+        if result and result[0] == hash_password(password):
+            return True
+        else:
+            return False
+    finally:
+        cur.close()
+        conn.close()
