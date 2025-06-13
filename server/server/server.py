@@ -1,6 +1,10 @@
 import socket
 import threading
 from datetime import datetime
+from config import get_db_connection
+import mysql.connector
+import bcrypt
+
 
 HOST = '127.0.0.1'
 PORT = 12345
@@ -81,7 +85,8 @@ def handle_client(conn, addr):
 
                 if message.strip() == "/quit":
                     break
-
+                # ✅ Lưu tin nhắn vào cơ sở dữ liệu
+                save_message_to_db(room_id, username, message, timestamp)
                 room_messages[room_id].append(full_msg)
                 broadcast(full_msg, sender_conn=conn, room_id=room_id)
 
@@ -123,6 +128,55 @@ def start_server():
     while True:
         conn, addr = server.accept()
         threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
+
+def save_message_to_db(room_code, username, content, timestamp):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Lấy user_id từ username
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user_result = cursor.fetchone()
+
+        # Lấy room_id từ room name (room_code)
+        cursor.execute("SELECT id FROM rooms WHERE name = %s", (room_code,))
+        room_result = cursor.fetchone()
+
+        if user_result and room_result:
+            user_id = user_result[0]
+            room_id = room_result[0]
+
+            # Thêm tin nhắn vào bảng messages
+            cursor.execute("""
+                INSERT INTO messages (room_id, user_id, content, timestamp)
+                VALUES (%s, %s, %s, %s)
+            """, (room_id, user_id, content, timestamp))
+
+            conn.commit()
+        else:
+            if not user_result:
+                print(f"[DB WARNING] Username '{username}' không tồn tại trong bảng users.")
+            if not room_result:
+                print(f"[DB WARNING] Room code '{room_code}' không tồn tại trong bảng rooms.")
+
+    except Exception as e:
+        print(f"[DB ERROR] Lỗi khi lưu tin nhắn: {e}")
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",          # Thay bằng tài khoản MySQL của bạn
+        password="",          # Mật khẩu MySQL
+        database="chat_app1"
+    )
+
 
 if __name__ == "__main__":
     start_server()

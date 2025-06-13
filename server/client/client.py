@@ -11,25 +11,33 @@ HOST = '127.0.0.1'
 PORT = 12345
 
 class ChatClient:
-    def __init__(self, master):
+    def __init__(self, master, username=None, room_id=None):
         self.master = master
 
         # Xử lý đóng cửa sổ an toàn
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Nhập tên người dùng
-        self.username = simpledialog.askstring("Tên người dùng", "Nhập tên của bạn:")
-        if not self.username:
+        if not username:
+            self.username = simpledialog.askstring("Tên người dùng", "Nhập tên của bạn:")
+        if not username:
             messagebox.showwarning("Lỗi", "Bạn phải nhập tên người dùng.")
             master.quit()
             return
+        # Đảm bảo tên người dùng không rỗng
+        self.username = username.strip()
 
         # Nhập mã phòng
-        self.room_id = simpledialog.askstring("Phòng Chat", "Nhập mã phòng:")
-        if not self.room_id:
+        if not room_id:
+            self.room_id = simpledialog.askstring("Phòng Chat", "Nhập mã phòng:")
+        if not room_id:
             messagebox.showwarning("Lỗi", "Bạn phải nhập mã phòng.")
             master.quit()
             return
+        # Đảm bảo mã phòng không rỗng
+        self.room_id = room_id.strip()
+
+
         #Đổi tiêu đề khung giao diện
         self.master.title(f"Mã Chat Room: {self.room_id} - Username: {self.username}")
 
