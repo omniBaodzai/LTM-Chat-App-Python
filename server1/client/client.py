@@ -16,30 +16,20 @@ class ChatClient:
 
         # Xử lý đóng cửa sổ an toàn
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
-
-        # Nhập tên người dùng
-        if not username:
-            self.username = simpledialog.askstring("Tên người dùng", "Nhập tên của bạn:")
-        if not username:
-            messagebox.showwarning("Lỗi", "Bạn phải nhập tên người dùng.")
-            master.quit()
-            return
-        # Đảm bảo tên người dùng không rỗng
+        
         self.username = username.strip()
-
-        # Nhập mã phòng
-        if not room_id:
-            self.room_id = simpledialog.askstring("Phòng Chat", "Nhập mã phòng:")
-        if not room_id:
-            messagebox.showwarning("Lỗi", "Bạn phải nhập mã phòng.")
-            master.quit()
-            return
-        # Đảm bảo mã phòng không rỗng
         self.room_id = room_id.strip()
 
-
-        #Đổi tiêu đề khung giao diện
-        self.master.title(f"Mã Chat Room: {self.room_id} - Username: {self.username}")
+        if not self.username or not self.room_id:
+            messagebox.showwarning("Lỗi", "Thiếu tên hoặc mã phòng.")
+            master.quit()
+            return
+        # Đặt kích thước cửa sổ
+        self.master.geometry("600x400")
+        self.master.resizable(False, False)
+        
+        # Đổi tiêu đề khung giao diện
+        self.master.title(f"{self.username} @ {self.room_id}")
 
         # Kết nối tới server
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

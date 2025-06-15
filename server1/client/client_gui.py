@@ -18,47 +18,47 @@ def get_db_connection():
         database="chat_app1"
     )
 
-class LoginRegisterGUI:
+# Màn hình bắt đầu
+class StartScreen:
     def __init__(self, master):
         self.master = master
-        master.title("Đăng nhập / Đăng ký")
+        master.title("Chào mừng đến Chat App")
+        master.geometry("320x180")
+
+        tk.Label(master, text="💬 Ứng dụng Chat Real-time", font=("Arial", 16, "bold")).pack(pady=30)
+        tk.Button(master, text="Bắt đầu", width=20, command=self.goto_login).pack()
+
+    def goto_login(self):
+        self.master.destroy()
+        root = tk.Tk()
+        LoginScreen(root)
+        root.mainloop()
+
+# Giao diện đăng nhập
+class LoginScreen:
+    def __init__(self, master):
+        self.master = master
+        master.title("Đăng nhập")
+        master.geometry("350x220")
 
         self.username_var = tk.StringVar()
         self.password_var = tk.StringVar()
         self.room_id_var = tk.StringVar()
-        # Thêm biến lưu email
-        self.email_var = tk.StringVar()
 
-         # Frame chính chứa toàn bộ form
-        form_frame = tk.Frame(master, padx=20, pady=20)
-        form_frame.pack()
+        form = tk.Frame(master, padx=20, pady=15)
+        form.pack()
 
-        # Tên người dùng
-        tk.Label(form_frame, text="Tên người dùng:").grid(row=0, column=0, sticky='w', pady=5)
-        self.username_entry = tk.Entry(form_frame, textvariable=self.username_var, width=30)
-        self.username_entry.grid(row=0, column=1, pady=5)
+        tk.Label(form, text="Tên người dùng:").grid(row=0, column=0, sticky='w', pady=5)
+        tk.Entry(form, textvariable=self.username_var, width=30).grid(row=0, column=1)
 
-        # Gmail
-        tk.Label(form_frame, text="Gmail:").grid(row=1, column=0, sticky='w', pady=5)
-        self.email_entry = tk.Entry(form_frame, textvariable=self.email_var, width=30)
-        self.email_entry.grid(row=1, column=1, pady=5)
+        tk.Label(form, text="Mật khẩu:").grid(row=1, column=0, sticky='w', pady=5)
+        tk.Entry(form, show='*', textvariable=self.password_var, width=30).grid(row=1, column=1)
 
-        # Mật khẩu
-        tk.Label(form_frame, text="Mật khẩu:").grid(row=2, column=0, sticky='w', pady=5)
-        self.password_entry = tk.Entry(form_frame, show='*', textvariable=self.password_var, width=30)
-        self.password_entry.grid(row=2, column=1, pady=5)
+        tk.Label(form, text="Mã phòng:").grid(row=2, column=0, sticky='w', pady=5)
+        tk.Entry(form, textvariable=self.room_id_var, width=30).grid(row=2, column=1)
 
-        # Mã phòng
-        tk.Label(form_frame, text="Mã phòng:").grid(row=3, column=0, sticky='w', pady=5)
-        self.room_id_entry = tk.Entry(form_frame, textvariable=self.room_id_var, width=30)
-        self.room_id_entry.grid(row=3, column=1, pady=5)
-
-        # Nút chức năng
-        button_frame = tk.Frame(master)
-        button_frame.pack(pady=10)
-
-        tk.Button(button_frame, text="Đăng nhập", width=15, command=self.login).pack(side='left', padx=5)
-        tk.Button(button_frame, text="Đăng ký", width=15, command=self.register).pack(side='left', padx=5)
+        tk.Button(master, text="Đăng nhập", width=15, command=self.login).pack(pady=(5, 2))
+        tk.Button(master, text="Chưa có tài khoản? Đăng ký", command=self.goto_register).pack()
 
     def login(self):
         username = self.username_var.get().strip()
@@ -66,50 +66,83 @@ class LoginRegisterGUI:
         room_id = self.room_id_var.get().strip()
         hashed = hash_password(password)
 
-        if not room_id:
-            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập mã phòng.")
+        if not username or not password or not room_id:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin.")
             return
 
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
 
-            # Lấy user_id
             cursor.execute("SELECT id FROM users WHERE username = %s AND password = %s", (username, hashed))
             user = cursor.fetchone()
+
             if not user:
                 messagebox.showerror("Lỗi", "Sai tên đăng nhập hoặc mật khẩu.")
                 conn.close()
                 return
+
             user_id = user[0]
 
-            # Kiểm tra hoặc tạo mã phòng
             cursor.execute("SELECT * FROM rooms WHERE name = %s", (room_id,))
             room = cursor.fetchone()
             if not room:
-                create = messagebox.askyesno("Phòng chưa tồn tại", f"Mã phòng '{room_id}' chưa có. Bạn có muốn tạo mới không?")
+                create = messagebox.askyesno("Phòng chưa tồn tại", f"Tạo mới phòng '{room_id}'?")
                 if create:
                     cursor.execute("INSERT INTO rooms (name, created_by) VALUES (%s, %s)", (room_id, user_id))
                     conn.commit()
+                    messagebox.showinfo("Thành công", f"Đã tạo phòng '{room_id}'.")
                 else:
-                    messagebox.showinfo("Thông báo", "Vui lòng nhập mã phòng hợp lệ.")
                     conn.close()
                     return
 
             conn.close()
             self.master.destroy()
-            self.open_chat_client(username, room_id)
+            new_root = tk.Tk()
+            ChatClient(new_root, username, room_id)
+            new_root.mainloop()
 
         except Exception as e:
             messagebox.showerror("Lỗi CSDL", str(e))
 
+    def goto_register(self):
+        self.master.destroy()
+        root = tk.Tk()
+        RegisterScreen(root)
+        root.mainloop()
+
+# Giao diện đăng ký
+class RegisterScreen:
+    def __init__(self, master):
+        self.master = master
+        master.title("Đăng ký")
+        master.geometry("350x220")
+
+        self.username_var = tk.StringVar()
+        self.password_var = tk.StringVar()
+        self.email_var = tk.StringVar()
+
+        form = tk.Frame(master, padx=20, pady=15)
+        form.pack()
+
+        tk.Label(form, text="Tên người dùng:").grid(row=0, column=0, sticky='w', pady=5)
+        tk.Entry(form, textvariable=self.username_var, width=30).grid(row=0, column=1)
+
+        tk.Label(form, text="Email:").grid(row=1, column=0, sticky='w', pady=5)
+        tk.Entry(form, textvariable=self.email_var, width=30).grid(row=1, column=1)
+
+        tk.Label(form, text="Mật khẩu:").grid(row=2, column=0, sticky='w', pady=5)
+        tk.Entry(form, show='*', textvariable=self.password_var, width=30).grid(row=2, column=1)
+
+        tk.Button(master, text="Đăng ký", width=15, command=self.register).pack(pady=(5, 2))
+        tk.Button(master, text="Đã có tài khoản? Đăng nhập", command=self.goto_login).pack()
+
     def register(self):
         username = self.username_var.get().strip()
         password = self.password_var.get()
-        email = self.email_var.get().strip()  # lấy Gmail
-        room_id = self.room_id_var.get().strip()
-        
-        if not username or not password or not email or not room_id:
+        email = self.email_var.get().strip()
+
+        if not username or not password or not email:
             messagebox.showwarning("Thiếu thông tin", "Vui lòng điền đầy đủ thông tin.")
             return
 
@@ -118,30 +151,29 @@ class LoginRegisterGUI:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO users (username, password, email)
-                VALUES (%s, %s, %s)
-            """, (username, hashed, email))
+            cursor.execute("INSERT INTO users (username, password, email) VALUES (%s, %s, %s)", (username, hashed, email))
             conn.commit()
             conn.close()
-            messagebox.showinfo("Thành công", "Đăng ký thành công! Bạn có thể đăng nhập.")
+            messagebox.showinfo("Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
+            self.goto_login()
         except mysql.connector.IntegrityError as err:
-            if "Duplicate entry" in str(err) and "username" in str(err):
+            if "username" in str(err):
                 messagebox.showerror("Lỗi", "Tên người dùng đã tồn tại.")
-            elif "Duplicate entry" in str(err) and "email" in str(err):
+            elif "email" in str(err):
                 messagebox.showerror("Lỗi", "Email đã được sử dụng.")
             else:
                 messagebox.showerror("Lỗi CSDL", str(err))
         except Exception as e:
             messagebox.showerror("Lỗi CSDL", str(e))
 
+    def goto_login(self):
+        self.master.destroy()
+        root = tk.Tk()
+        LoginScreen(root)
+        root.mainloop()
 
-    def open_chat_client(self, username, room_id):
-        new_root = tk.Tk()
-        ChatClient(new_root, username, room_id)
-        new_root.mainloop()
-
+# Điểm khởi chạy
 if __name__ == "__main__":
     root = tk.Tk()
-    app = LoginRegisterGUI(root)
+    StartScreen(root)
     root.mainloop()

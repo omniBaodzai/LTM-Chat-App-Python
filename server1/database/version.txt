@@ -1,0 +1,5 @@
+# ĐỀ XUẤT:
+    Với Python + MySQL, có thể dùng:
+        yoyo-migrations – đơn giản, dễ dùng
+        alembic (dùng phổ biến với SQLAlchemy nhưng cũng áp dụng được với MySQL)
+    ➡ Giúp bạn tự động tạo bảng, cập nhật cấu trúc mà không cần sửa tay file .sql
