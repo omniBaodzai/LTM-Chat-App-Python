@@ -1,3 +1,4 @@
+#client.py
 import socket
 import threading
 import tkinter as tk
@@ -6,6 +7,7 @@ from datetime import datetime
 import atexit
 import sys
 import signal
+import json
 
 HOST = '127.0.0.1'
 PORT = 12345
@@ -71,43 +73,74 @@ class ChatClient:
                 self.master.quit()
 
     def receive_messages(self):
+        self.in_history = False
+        buffer = ''
         while True:
             try:
-                message = self.client.recv(1024).decode()
-                if not message:
+                data = self.client.recv(4096).decode()
+                if not data:
                     break
-
-                parts = message.split('|')
-                if len(parts) == 3:
-                    sender, content, timestamp = parts
-
-                    if sender == "system":
-                        self.display_message(f"[{timestamp}] {content}", is_system=True)
-                    elif sender == self.username:
-                        self.display_message(f"[{timestamp}] Bạn: {content}", align_right=True)
-                    else:
-                        self.display_message(f"[{timestamp}] {sender}: {content}", align_right=False)
-                else:
-                    self.display_message(message)
+                buffer += data
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    self.process_message(line.strip())
             except Exception as e:
                 print(f"[!] Lỗi khi nhận tin nhắn: {e}")
                 break
+    
+    def process_message(self, message):
+        if message == "__history_start__":
+            self.in_history = True
+            return
+        elif message == "__history_end__":
+            self.in_history = False
+            self.display_message("— Hết lịch sử tin nhắn —", is_system=True)
+            return
 
-    def display_message(self, message, align_right=False, is_system=False):
-        self.chat_box.config(state='normal')
-        self.chat_box.tag_configure('right', justify='right', background='lightblue', font=('Arial', 10), lmargin1=150, lmargin2=150)
-        self.chat_box.tag_configure('left', justify='left', background='white', font=('Arial', 10), lmargin1=5, lmargin2=5)
-        self.chat_box.tag_configure('center', justify='center', foreground='gray', font=('Arial', 9, 'italic'))
+        try:
+            msg_data = json.loads(message)
+            sender = msg_data['sender']
+            content = msg_data['content']
+            timestamp = msg_data['timestamp']
+        except json.JSONDecodeError:
+            self.display_message(message)
+            return
 
-        if align_right:
-            self.chat_box.insert(tk.END, message + '\n', 'right')
-        elif is_system:
-            self.chat_box.insert(tk.END, message + '\n', 'center')
+        if sender == "system":
+            self.display_message(f"[{timestamp}] {content}", is_system=True)
+        elif sender == self.username:
+            self.display_message(f"[{timestamp}] Bạn: {content}", align_right=True, is_history=self.in_history)
         else:
-            self.chat_box.insert(tk.END, message + '\n', 'left')
+            self.display_message(f"[{timestamp}] {sender}: {content}", align_right=False, is_history=self.in_history)
+
+    def display_message(self, message, align_right=False, is_system=False, is_history=False):
+        self.chat_box.config(state='normal')
+
+        self.chat_box.tag_configure('right', justify='right', background='lightblue',
+                                    font=('Arial', 10), lmargin1=150, lmargin2=150)
+        self.chat_box.tag_configure('left', justify='left', background='white',
+                                    font=('Arial', 10), lmargin1=5, lmargin2=5)
+        self.chat_box.tag_configure('center', justify='center', foreground='gray',
+                                    font=('Arial', 9, 'italic'))
+
+        # ✅ Thêm định dạng riêng cho lịch sử
+        self.chat_box.tag_configure('history-left', justify='left', background='#eeeeee',
+                                    font=('Arial', 10), lmargin1=5, lmargin2=5)
+        self.chat_box.tag_configure('history-right', justify='right', background='#dddddd',
+                                    font=('Arial', 10), lmargin1=150, lmargin2=150)
+
+        if is_system:
+            self.chat_box.insert(tk.END, message + '\n', 'center')
+        elif is_history:
+            tag = 'history-right' if align_right else 'history-left'
+            self.chat_box.insert(tk.END, message + '\n', tag)
+        else:
+            tag = 'right' if align_right else 'left'
+            self.chat_box.insert(tk.END, message + '\n', tag)
 
         self.chat_box.yview(tk.END)
         self.chat_box.config(state='disabled')
+
 
     def on_closing(self):
         try:

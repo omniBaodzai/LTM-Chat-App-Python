@@ -28,6 +28,6 @@ Cách 2: Dùng phpMyAdmin
     Chọn tab Import
     Chọn file schema.sql → Nhấn Go
 
-✅ Cách 3: Dùng dòng lệnh (Command Line)
+Cách 3: Dùng dòng lệnh (Command Line)
     mysql -u root -p chat_app < database/schema.sql
 
