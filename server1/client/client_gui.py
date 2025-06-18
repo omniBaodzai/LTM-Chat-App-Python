@@ -89,7 +89,10 @@ class LoginScreen:
             if not room:
                 create = messagebox.askyesno("Phòng chưa tồn tại", f"Tạo mới phòng '{room_id}'?")
                 if create:
+                    # Sau khi tạo phòng xong (room_name, created_by)
                     cursor.execute("INSERT INTO rooms (name, created_by) VALUES (%s, %s)", (room_id, user_id))
+                    # Sau đó gán người tạo là admin
+                    cursor.execute("INSERT INTO room_members (room_id, user_id, is_admin) VALUES (%s, %s, TRUE)", (room_id, user_id))
                     conn.commit()
                     messagebox.showinfo("Thành công", f"Đã tạo phòng '{room_id}'.")
                 else:

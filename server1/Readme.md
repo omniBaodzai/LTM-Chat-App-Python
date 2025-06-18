@@ -30,4 +30,3 @@ Cách 2: Dùng phpMyAdmin
 
 Cách 3: Dùng dòng lệnh (Command Line)
     mysql -u root -p chat_app < database/schema.sql
-

@@ -1,0 +1,36 @@
+1. /quit – Lệnh rõ ràng do người dùng gửi
+Khi người dùng gõ /quit trong khung chat, server nhận chuỗi lệnh rõ ràng, có thể xử lý logic đầy đủ như:
+    Nếu là admin, kiểm tra nhượng quyền rồi mới rời nhóm
+    Gửi thông báo rời phòng
+    Xóa khỏi DB (room_members)
+    Dọn sạch RAM (clients, rooms, usernames)
+Đây là cách rời nhóm “có chủ đích”, dễ kiểm soát và xử lý.
+
+💢 2. Đóng khung chat (nút X), Ctrl+C, tắt mạng,...
+Đây là ngắt kết nối đột ngột.
+Server chỉ phát hiện qua lỗi:
+    if not data:
+        print("Client mất kết nối.")
+        break
+hoặc exception như:
+    except ConnectionResetError:
+Không có dòng lệnh /quit → bạn không phân biệt được người dùng muốn rời nhóm hẳn hay chỉ đóng tạm (giống như “rời giao diện”).
+
+🔍 Sự khác biệt lớn nhất:
+Hành động	    Server có biết lý do?	        Có thể xử lý rời nhóm đúng cách không?
+/quit	    ✅ Có – do người gửi	            ✅ Có thể kiểm tra, xác nhận nhượng quyền
+Đóng X	    ❌ Không rõ	                ❌ Chỉ xử lý ngắt kết nối, không chắc rời nhóm
+Ctrl+C	    ❌ Không rõ	                ❌ Server không kịp xử lý DB nếu không có /quit
+
+
+
+#Admin phòng
+Từ client (sau khi đang là admin), gửi:
+    /transfer_admin Alice
+    → Alice sẽ trở thành admin, và cả phòng sẽ thấy thông báo
+    
+MỚI XỬ LÝ XÓA PHÒNG ĐƠN GIẢN!!!!!!!!!!!!! = >VẪN CHƯA XÓA ỔN ĐỊNH DO RÀNG BUỘC KHÓA NGOẠI; KHI XÓA PHÒNG - >XÓA HẾT TIN NHẮN, THÔNG TIN TRC ĐÓ. -> Đã cập nhập khóa ngoại Xóa
+        NÊN xử lý trigger cụ thể phần này khi hoàn tất hầu hết các bảng
+        NÊN đặt ít vấn đề trong tin nhắn (hoặc chuyên sâu về gửi/ nhận file)
+    
+    

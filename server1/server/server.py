@@ -56,6 +56,7 @@ def handle_client(conn, addr):
             return
 
         room_id, username = room_data.split('|', 1)
+        room_id = int(room_id.strip()) 
         if any(un == username and clients[c] == room_id for c, un in usernames.items()):
             conn.send("Tên người dùng đã được sử dụng trong phòng này. Vui lòng chọn tên khác.".encode())
             conn.close()
@@ -64,10 +65,12 @@ def handle_client(conn, addr):
         usernames[conn] = username
         clients[conn] = room_id
 
+        # ✅ Thêm thành viên vào bảng room_members
+        add_user_to_room_members(room_id, username)
         if room_id not in rooms:
             rooms[room_id] = []
         rooms[room_id].append(conn)
-
+        
         # ✅ Khởi tạo lịch sử tin nhắn nếu chưa có
         if room_id not in room_messages:
             room_messages[room_id] = []
@@ -128,6 +131,25 @@ def handle_client(conn, addr):
 
                 if message.strip() == "/quit":
                     break
+                if message == "/leave":
+                # Gỡ user khỏi phòng và tự động xử lý admin nếu cần
+                    success = remove_user_from_room(room_id, username)
+                    if success:
+                        leave_obj = {
+                            "sender": "system",
+                            "content": f"{username} đã rời nhóm.",
+                            "timestamp": display_time
+                        }
+                        broadcast(json.dumps(leave_obj), room_id=room_id)
+                        break
+                    else:
+                        error_obj = {
+                            "sender": "system",
+                            "content": "❌ Không thể rời nhóm. Vui lòng thử lại.",
+                            "timestamp": display_time
+                        }
+                        conn.sendall(json.dumps(error_obj).encode())
+
 
                 full_obj = {"sender": username, "content": message, "timestamp": display_time}
                 print(f"[Room {room_id}] {username}: {message} [{display_time}]")
@@ -149,6 +171,7 @@ def handle_client(conn, addr):
                 break
 
     finally:
+        # ➤ Thoát tạm (do Ctrl+C, tắt app, v.v.)
         room_id = clients.get(conn)
         username = usernames.get(conn, "???")
 
@@ -166,6 +189,7 @@ def handle_client(conn, addr):
             leave_time = datetime.now().strftime('%H:%M:%S')
             leave_obj = {"sender": "system", "content": f"{username} đã rời phòng", "timestamp": leave_time}
             broadcast(json.dumps(leave_obj), room_id=room_id)
+            
 
 def start_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -202,6 +226,114 @@ def save_message_to_db(room_code, username, content, timestamp):
                 print(f"[DB WARNING] Room code '{room_code}' không tồn tại trong bảng rooms.")
     except Exception as e:
         print(f"[DB ERROR] Lỗi khi lưu tin nhắn: {e}")
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+def add_user_to_room_members(room_code, username, is_admin=False):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Lấy user_id từ username
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user_result = cursor.fetchone()
+
+        # Lấy room_id từ room_code
+        cursor.execute("SELECT id FROM rooms WHERE name = %s", (room_code,))
+        room_result = cursor.fetchone()
+
+        if user_result and room_result:
+            user_id = user_result[0]
+            room_id = room_result[0]
+
+            # Thêm nếu chưa tồn tại
+            cursor.execute("""
+                INSERT IGNORE INTO room_members (room_id, user_id, is_admin)
+                VALUES (%s, %s, %s)
+            """, (room_id, user_id, is_admin))
+            conn.commit()
+        else:
+            print(f"[DB WARNING] Không thể thêm {username} vào room_members (chưa có user hoặc phòng).")
+
+    except Exception as e:
+        print(f"[DB ERROR] Lỗi thêm thành viên vào room_members: {e}")
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+def remove_user_from_room(room_id, username):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Lấy user_id từ username
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            print(f"[WARN] ➤ Không tìm thấy user {username}")
+            return False
+        user_id = user_row[0]
+
+        # Kiểm tra xem người dùng có trong phòng không
+        cursor.execute("""
+            SELECT is_admin FROM room_members
+            WHERE room_id = %s AND user_id = %s
+        """, (room_id, user_id))
+        result = cursor.fetchone()
+        if not result:
+            print(f"[WARN] ➤ {username} không phải thành viên phòng ID {room_id}")
+            return False
+        is_admin = result[0]
+
+        # Nếu là admin, tìm người khác làm admin
+        if is_admin:
+            cursor.execute("""
+                SELECT user_id FROM room_members
+                WHERE room_id = %s AND user_id != %s
+                ORDER BY user_id ASC LIMIT 1
+            """, (room_id, user_id))
+            next_admin = cursor.fetchone()
+            if next_admin:
+                next_admin_id = next_admin[0]
+                cursor.execute("""
+                    UPDATE room_members
+                    SET is_admin = TRUE
+                    WHERE room_id = %s AND user_id = %s
+                """, (room_id, next_admin_id))
+                print(f"[INFO] ➤ Chuyển quyền admin cho user_id {next_admin_id} trong phòng ID {room_id}")
+            else:
+                print(f"[INFO] ➤ Không còn ai khác trong phòng ID {room_id} để làm admin")
+
+        # Xoá user khỏi room_members
+        cursor.execute("""
+            DELETE FROM room_members
+            WHERE room_id = %s AND user_id = %s
+        """, (room_id, user_id))
+        conn.commit()
+
+        print(f"[DB] ➤ {username} đã rời phòng ID {room_id}")
+        # ✅ Kiểm tra nếu không còn ai trong phòng thì xoá luôn phòng
+        cursor.execute("""
+            SELECT COUNT(*) FROM room_members WHERE room_id = %s
+        """, (room_id,))
+        member_count = cursor.fetchone()[0]
+        if member_count == 0:
+            cursor.execute("DELETE FROM rooms WHERE id = %s", (room_id,))
+            conn.commit()
+            print(f"[DB] ➤ Đã xoá phòng ID {room_id} vì không còn thành viên.")
+
+        return True
+
+    except Exception as e:
+        print(f"[DB ERROR] Lỗi khi {username} rời phòng ID {room_id}: {e}")
+        return False
     finally:
         try:
             cursor.close()

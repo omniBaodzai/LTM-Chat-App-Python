@@ -28,6 +28,10 @@ CREATE TABLE room_members (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+
+
+
+// chưa phát triển
 -- 🔹 Bảng lưu lịch sử tin nhắn trong phòng
 CREATE TABLE messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
