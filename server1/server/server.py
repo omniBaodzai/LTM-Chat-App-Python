@@ -56,7 +56,10 @@ def handle_client(conn, addr):
             return
 
         room_id, username = room_data.split('|', 1)
-        room_id = int(room_id.strip()) 
+        room_id = int(room_id.strip())
+        
+
+        # ✅ Kiểm tra trùng tên trong cùng phòng (trên RAM)
         if any(un == username and clients[c] == room_id for c, un in usernames.items()):
             conn.send("Tên người dùng đã được sử dụng trong phòng này. Vui lòng chọn tên khác.".encode())
             conn.close()
@@ -65,6 +68,7 @@ def handle_client(conn, addr):
         usernames[conn] = username
         clients[conn] = room_id
 
+        
         # ✅ Thêm thành viên vào bảng room_members
         add_user_to_room_members(room_id, username)
         if room_id not in rooms:
@@ -132,23 +136,186 @@ def handle_client(conn, addr):
                 if message.strip() == "/quit":
                     break
                 if message == "/leave":
-                # Gỡ user khỏi phòng và tự động xử lý admin nếu cần
+                    try:
+                        conn_check = get_db_connection()
+                        cursor_check = conn_check.cursor()
+                        cursor_check.execute("SELECT COUNT(*) FROM room_members WHERE room_id = %s", (room_id,))
+                        member_count = cursor_check.fetchone()[0]
+
+                        if member_count <= 1:
+                            warning_obj = {
+                                "sender": "system",
+                                "content": (
+                                    "⚠️ Bạn là người cuối cùng trong nhóm.\n"
+                                    "Nếu bạn rời phòng, toàn bộ tin nhắn và phòng này sẽ bị xóa vĩnh viễn.\n"
+                                    "Gõ `/confirm_leave` để xác nhận rời phòng.\n"
+                                    "Gõ `/cancel` để hủy."
+                                ),
+                                "timestamp": display_time
+                            }
+                            conn.sendall((json.dumps(warning_obj) + '\n').encode())
+                            continue
+                        else:
+                            success = remove_user_from_room(room_id, username)
+                            if success:
+                                leave_obj = {"sender": "system", "content": f"{username} đã rời nhóm.", "timestamp": display_time}
+                                broadcast(json.dumps(leave_obj), room_id=room_id)
+                                break
+                            else:
+                                error_obj = {"sender": "system", "content": "❌ Không thể rời nhóm. Vui lòng thử lại.", "timestamp": display_time}
+                                conn.sendall(json.dumps(error_obj).encode())
+                    except Exception as e:
+                        print(f"[!] Lỗi khi xử lý /leave: {e}")
+                    finally:
+                        try:
+                            cursor_check.close()
+                            conn_check.close()
+                        except:
+                            pass
+                    continue
+
+                if message == "/confirm_leave":
                     success = remove_user_from_room(room_id, username)
                     if success:
-                        leave_obj = {
-                            "sender": "system",
-                            "content": f"{username} đã rời nhóm.",
-                            "timestamp": display_time
-                        }
+                        leave_obj = {"sender": "system", "content": f"{username} đã rời nhóm (Xác nhận xóa nhóm nếu bạn là người cuối).", "timestamp": display_time}
                         broadcast(json.dumps(leave_obj), room_id=room_id)
                         break
                     else:
-                        error_obj = {
-                            "sender": "system",
-                            "content": "❌ Không thể rời nhóm. Vui lòng thử lại.",
-                            "timestamp": display_time
-                        }
+                        error_obj = {"sender": "system", "content": "❌ Không thể rời nhóm. Vui lòng thử lại.", "timestamp": display_time}
                         conn.sendall(json.dumps(error_obj).encode())
+                    continue
+
+                if message == "/cancel":
+                    cancel_obj = {"sender": "system", "content": "✅ Bạn đã hủy lệnh rời phòng.", "timestamp": display_time}
+                    conn.sendall((json.dumps(cancel_obj) + '\n').encode())  # <-- Đảm bảo có \n
+                    continue
+
+                #Kích thành viên
+                if message.startswith("/kick "):
+                    if not is_user_admin(room_id, username):
+                        error_obj = {"sender": "system", "content": "❌ Bạn không có quyền kick người khác.", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_obj) + '\n').encode())
+                        continue
+
+                    parts = message.split(' ', 1)
+                    if len(parts) != 2 or not parts[1].strip():
+                        error_obj = {"sender": "system", "content": "⚠️ Cú pháp đúng: /kick <tên_người_dùng>", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_obj) + '\n').encode())
+                        continue
+
+                    target_username = parts[1].strip()
+                    if target_username == username:
+                        error_obj = {"sender": "system", "content": "❌ Không thể tự kick chính mình.", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_obj) + '\n').encode())
+                        continue
+
+                    # ➤ Tìm kết nối tương ứng với user bị kick
+                    target_conn = None
+                    for c, un in usernames.items():
+                        if un == target_username and clients.get(c) == room_id:
+                            target_conn = c
+                            break
+
+                    kicked = remove_user_from_room(room_id, target_username)
+                    if kicked:
+                        # Gửi tin báo cho toàn phòng
+                        kick_msg = {"sender": "system", "content": f"⚠️ {target_username} đã bị {username} kick khỏi phòng.", "timestamp": display_time}
+                        broadcast(json.dumps(kick_msg), room_id=room_id)
+
+                        # Nếu tìm được kết nối socket -> đóng và xoá khỏi RAM
+                        if target_conn:
+                            try:
+                                target_conn.sendall((json.dumps({
+                                        "sender": "system",
+                                        "content": "🚫 Bạn đã bị kick khỏi phòng.",
+                                        "timestamp": display_time
+                                    }) + '\n').encode())
+
+                                target_conn.close()
+                            except:
+                                pass
+                            clients.pop(target_conn, None)
+                            usernames.pop(target_conn, None)
+                            if target_conn in rooms.get(room_id, []):
+                                rooms[room_id].remove(target_conn)
+                    else:
+                        error_msg = {"sender": "system", "content": f"❌ Không thể kick {target_username}.", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_msg) + '\n').encode())
+                    continue
+
+
+                
+                # Gán admin
+                if message.startswith("/transfer_admin"):
+                    parts = message.split(' ', 1)
+                    if len(parts) != 2 or not parts[1].strip():
+                        error_obj = {"sender": "system", "content": "⚠️ Cú pháp đúng: /transfer_admin <tên_người_dùng_mới>", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_obj) + '\n').encode())
+                        continue
+
+                    if not is_user_admin(room_id, username):
+                        error_obj = {"sender": "system", "content": "❌ Bạn không phải là admin.", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_obj) + '\n').encode())
+                        continue
+
+                    new_admin = parts[1].strip()
+                    try:
+                        conn_db = get_db_connection()
+                        cursor = conn_db.cursor()
+                        # Đặt tất cả về is_admin = False
+                        cursor.execute("""
+                            UPDATE room_members SET is_admin = FALSE
+                            WHERE room_id = %s
+                        """, (room_id,))
+                        # Gán admin cho người mới
+                        cursor.execute("""
+                            UPDATE room_members
+                            SET is_admin = TRUE
+                            WHERE room_id = %s AND user_id = (SELECT id FROM users WHERE username = %s)
+                        """, (room_id, new_admin))
+                        conn_db.commit()
+                        info_msg = {"sender": "system", "content": f"🔄 {username} đã chuyển quyền admin cho {new_admin}.", "timestamp": display_time}
+                        broadcast(json.dumps(info_msg), room_id=room_id)
+                    except Exception as e:
+                        print(f"[!] Lỗi khi chuyển quyền admin: {e}")
+                    finally:
+                        try:
+                            cursor.close()
+                            conn_db.close()
+                        except:
+                            pass
+                    continue
+
+                # Trực tiếp xóa phòng chat dù vẫn còn thành viên
+                if message == "/delete_room":
+                    if not is_user_admin(room_id, username):
+                        error_obj = {"sender": "system", "content": "❌ Bạn không có quyền xoá phòng.", "timestamp": display_time}
+                        conn.sendall((json.dumps(error_obj) + '\n').encode())
+                        continue
+
+                    try:
+                        conn_db = get_db_connection()
+                        cursor = conn_db.cursor()
+                        cursor.execute("DELETE FROM messages WHERE room_id = %s", (room_id,))
+                        cursor.execute("DELETE FROM room_members WHERE room_id = %s", (room_id,))
+                        cursor.execute("DELETE FROM rooms WHERE id = %s", (room_id,))
+                        conn_db.commit()
+                        info_msg = {"sender": "system", "content": f"💣 {username} đã xoá phòng.", "timestamp": display_time}
+                        broadcast(json.dumps(info_msg), room_id=room_id)
+                        break  # Rời khỏi vòng lặp
+                    except Exception as e:
+                        print(f"[!] Lỗi khi xoá phòng: {e}")
+                    finally:
+                        try:
+                            cursor.close()
+                            conn_db.close()
+                        except:
+                            pass
+                    continue
+
+
+
+
 
 
                 full_obj = {"sender": username, "content": message, "timestamp": display_time}
@@ -348,6 +515,27 @@ def room_exists_in_db(room_code):
         cursor.execute("SELECT id FROM rooms WHERE name = %s", (room_code,))
         result = cursor.fetchone()
         return bool(result)
+    except:
+        return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+def is_user_admin(room_id, username):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT rm.is_admin
+            FROM room_members rm
+            JOIN users u ON rm.user_id = u.id
+            WHERE rm.room_id = %s AND u.username = %s
+        """, (room_id, username))
+        result = cursor.fetchone()
+        return result and result[0] == 1
     except:
         return False
     finally:

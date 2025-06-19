@@ -30,7 +30,16 @@ Từ client (sau khi đang là admin), gửi:
     → Alice sẽ trở thành admin, và cả phòng sẽ thấy thông báo
     
 MỚI XỬ LÝ XÓA PHÒNG ĐƠN GIẢN!!!!!!!!!!!!! = >VẪN CHƯA XÓA ỔN ĐỊNH DO RÀNG BUỘC KHÓA NGOẠI; KHI XÓA PHÒNG - >XÓA HẾT TIN NHẮN, THÔNG TIN TRC ĐÓ. -> Đã cập nhập khóa ngoại Xóa
-        NÊN xử lý trigger cụ thể phần này khi hoàn tất hầu hết các bảng
-        NÊN đặt ít vấn đề trong tin nhắn (hoặc chuyên sâu về gửi/ nhận file)
-    
-    
+        NÊN xử lý trigger cụ thể phần này khi hoàn tất hầu hết các bảng ❌
+        NÊN đặt ít vấn đề trong tin nhắn (hoặc chuyên sâu về gửi/ nhận file)❌
+
+
+| Thứ tự | Thành phần                         | Mức quan trọng       | Hành động cần làm                                     |
+| ------ | ---------------------------------- | -------------------- | ----------------------------------------------------- |
+| 1️⃣  ✅  | `room_exists_in_db()`              | 🔴 Cực kỳ quan trọng | Dùng kiểm tra trước khi thêm vào room                 |
+| 2️⃣  ✅  | `is_admin`                         | 🔴 Quan trọng        | Phân quyền rõ ràng admin/member                       |
+| 3️⃣    | `MAX_ROOM_CACHE` + dọn RAM         | 🟠 Trung bình        | Giải phóng bộ nhớ khi phòng rỗng                      |
+| 4️⃣    | `room_code` vs `room_id`           | 🟠 Trung bình        | Đồng bộ dùng chung `room_code` hoặc `room_id` rõ ràng |
+| 5️⃣    | `room_messages` lưu RAM            | 🟢 Có thể cải thiện  | Dọn khi phòng trống                                   |
+| 6️⃣    | Kiểm tra `room_data` đầu vào       | 🟢 Cẩn trọng bảo mật | Tránh lỗi client gửi sai định dạng                    |
+| 7️⃣    | `usernames` chưa kiểm tra toàn cục | 🟢 Có thể cải tiến   | Giới hạn username toàn hệ thống                       |

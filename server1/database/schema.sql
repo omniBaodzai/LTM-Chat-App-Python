@@ -4,7 +4,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     username VARCHAR(100) NOT NULL,
-    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen DATETIME DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -14,7 +14,7 @@ CREATE TABLE rooms (
     name VARCHAR(100) NOT NULL,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id)
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- 🔹 Bảng thành viên trong phòng (có phân quyền admin)
@@ -28,10 +28,6 @@ CREATE TABLE room_members (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-
-
-
-// chưa phát triển
 -- 🔹 Bảng lưu lịch sử tin nhắn trong phòng
 CREATE TABLE messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -43,6 +39,9 @@ CREATE TABLE messages (
     FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
 );
 
+
+
+// chưa phát triển
 -- 🔹 Bảng tin nhắn riêng giữa 2 người dùng
 CREATE TABLE private_messages (
     id INT AUTO_INCREMENT PRIMARY KEY,

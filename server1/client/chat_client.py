@@ -1,4 +1,4 @@
-#client.py
+#chat_client.py
 import socket
 import threading
 import tkinter as tk
@@ -8,6 +8,7 @@ import atexit
 import sys
 import signal
 import json
+from login import show_login_screen  # ✅ Tránh import class trực tiếp (để tránh vòng lặp)
 
 HOST = '127.0.0.1'
 PORT = 12345
@@ -21,6 +22,7 @@ class ChatClient:
         
         self.username = username.strip()
         self.room_id = room_id.strip()
+        self.kicked = False  # ✅ Cờ kiểm tra bị kick
 
         if not self.username or not self.room_id:
             messagebox.showwarning("Lỗi", "Thiếu tên hoặc mã phòng.")
@@ -62,6 +64,8 @@ class ChatClient:
         signal.signal(signal.SIGINT, self.signal_handler)
 
     def send_message(self, event=None):
+        if self.kicked:
+            return  # ✅ Không cho gửi nếu đã bị kick
         msg = self.entry_field.get()
         if msg:
             try:
@@ -102,8 +106,24 @@ class ChatClient:
             sender = msg_data['sender']
             content = msg_data['content']
             timestamp = msg_data['timestamp']
-        except json.JSONDecodeError:
-            self.display_message(message)
+        except json.JSONDecodeError as e:
+            print(f"[⚠️ JSON lỗi]: {e} | Dòng bị lỗi: {message}")
+            self.display_message(f"[⚠️ JSON lỗi]: {message}", is_system=True)
+            return
+        
+        # ✅ Nếu bị kick
+        if "bị kick khỏi phòng" in content or "🚫 Bạn đã bị kick" in content:
+            self.kicked = True  # ➤ Gắn cờ bị kick
+            self.display_message(f"[{timestamp}] {content}", is_system=True)
+
+            try:
+                self.client.close()
+            except:
+                pass
+
+            messagebox.showerror("🚫 Bạn bị kick!", f"{content}\n\nBạn sẽ trở lại màn hình chính.")
+            self.master.destroy()
+            show_login_screen()  # ✅ Gọi lại màn hình login
             return
 
         if sender == "system":
