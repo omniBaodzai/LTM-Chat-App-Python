@@ -79,15 +79,27 @@ class ChatClient(ttk.Frame):
 
         s = ttk.Style()
         s.configure('Toggle.TButton', 
-                    font=('Segoe UI Symbol', 12, 'bold'), 
-                    background='#4CAF50', 
-                    foreground='white',   
-                    relief='flat',        
-                    borderwidth=0,        
-                    padding=(5, 0))       
+                            font=('Segoe UI Symbol', 12, 'bold'), 
+                            background='#4CAF50', 
+                            foreground='white',  
+                            relief='flat',        
+                            borderwidth=0,        
+                            padding=(5, 0))      
         s.map('Toggle.TButton',
               background=[('active', '#66BB6A')], 
               foreground=[('active', 'white')])
+
+        s.configure('Danger.TButton',
+                            font=('Segoe UI', 10, 'bold'),
+                            background='#FF6347', # Tomato
+                            foreground='white',
+                            relief='flat',
+                            borderwidth=0,
+                            padding=(5, 5))
+        s.map('Danger.TButton',
+              background=[('active', '#FF7F50'), ('disabled', '#D3D3D3')],
+              foreground=[('disabled', '#A9A9A9')])
+
 
         content_frame = ttk.Frame(self, padding="5 5 5 5")
         content_frame.pack(fill=tk.BOTH, expand=True)
@@ -99,8 +111,8 @@ class ChatClient(ttk.Frame):
         self.main_pane.add(chat_frame, weight=3)
 
         self.chat_box = scrolledtext.ScrolledText(chat_frame, state='disabled', wrap=tk.WORD, 
-                                                    font=('Segoe UI', 10),
-                                                    relief=tk.FLAT, borderwidth=1)
+                                                     font=('Segoe UI', 10),
+                                                     relief=tk.FLAT, borderwidth=1)
         self.chat_box.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
 
         input_frame = ttk.Frame(chat_frame)
@@ -149,14 +161,22 @@ class ChatClient(ttk.Frame):
             self.online_users_count_label.pack(side=tk.LEFT)
             
             self.toggle_users_button = ttk.Button(self.online_users_count_frame, text="▼", 
-                                                    command=self.toggle_online_users_inline,
-                                                    style='Toggle.TButton',
-                                                    width=3) 
+                                                     command=self.toggle_online_users_inline,
+                                                     style='Toggle.TButton',
+                                                     width=3) 
             self.toggle_users_button.pack(side=tk.LEFT, padx=(5,0))
             # -----------------------------------------------------------------------
 
             # Create online_users_buttons_frame only for public chat
             self.online_users_buttons_frame = ttk.Frame(self.users_info_frame, relief='solid', borderwidth=1)
+
+            # Add Delete Room Button (for public chat only)
+            self.delete_room_button = ttk.Button(self.users_info_frame, text="Xóa phòng", 
+                                                     command=self.delete_room,
+                                                     style='Danger.TButton',
+                                                     state=tk.DISABLED) # Initially disabled
+            self.delete_room_button.pack(pady=(10, 5), padx=15, fill=tk.X)
+
 
         elif self.chat_mode == "private":
             # Chỉ hiển thị tên người dùng đích (target_username) và trạng thái
@@ -203,13 +223,13 @@ class ChatClient(ttk.Frame):
 
         s = ttk.Style()
         s.configure('User.TButton', 
-                    font=('Segoe UI', 10),
-                    background='#E0E0E0', 
-                    foreground='black',   
-                    relief='flat',        
-                    borderwidth=1,
-                    bordercolor='#C0C0C0', 
-                    padding=(5, 3))       
+                            font=('Segoe UI', 10),
+                            background='#E0E0E0', 
+                            foreground='black',  
+                            relief='flat',        
+                            borderwidth=1,
+                            bordercolor='#C0C0C0', 
+                            padding=(5, 3))      
         s.map('User.TButton',
               background=[('active', '#C5E1A5'), 
                           ('pressed', '#9CCC65')], 
@@ -217,8 +237,8 @@ class ChatClient(ttk.Frame):
 
         for user in sorted(self.online_users, key=lambda x: (x != self.username, x)): 
             user_button = ttk.Button(self.online_users_buttons_frame, text=user, 
-                                        command=lambda u=user: self.on_user_selected_button(u),
-                                        style='User.TButton') 
+                                         command=lambda u=user: self.on_user_selected_button(u),
+                                         style='User.TButton') 
             user_button.pack(fill=tk.X, pady=1) 
         print(f"Updated user buttons with: {self.online_users}") 
 
@@ -365,6 +385,12 @@ class ChatClient(ttk.Frame):
                 self.room_creation_date = creation_date
                 self.display_room_info()
                 
+                # Enable/Disable Delete Room button based on creator
+                if self.chat_mode == "public" and self.username == self.room_creator:
+                    self.delete_room_button.config(state=tk.NORMAL)
+                else:
+                    self.delete_room_button.config(state=tk.DISABLED)
+
                 received_online_users = [u for u in users_str.split(',') if u]
                 
                 print(f"Parsed ROOM_INFO_AND_USERS: Room='{room_name}', Creator='{creator}', Date='{creation_date}', Users={received_online_users}, Count: {len(received_online_users)}")
@@ -390,8 +416,16 @@ class ChatClient(ttk.Frame):
                     timestamp = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").strftime("%H:%M:%S")
                 except ValueError:
                     pass
-                is_private = data.startswith("PRIVATE_")
-                self.display_message(f"[{timestamp}] {sender}: {content}", align_right=(sender == self.username), is_private=is_private)
+                is_private_msg_received = data.startswith("PRIVATE_MSG_RECV|")
+                
+                # NEW LOGIC: Only display private messages if in private chat mode and it's for the current target
+                # or display public messages if in public chat mode.
+                if (is_private_msg_received and self.chat_mode == "private" and 
+                    (sender == self.target_username or sender == self.username)) or \
+                   (not is_private_msg_received and self.chat_mode == "public"):
+                    self.display_message(f"[{timestamp}] {sender}: {content}", align_right=(sender == self.username), is_private=is_private_msg_received)
+                else:
+                    print(f"Skipping display of message in current chat mode. Mode: {self.chat_mode}, Is Private: {is_private_msg_received}, Sender: {sender}, Target: {self.target_username}")
             else:
                 self.display_message(data)
 
@@ -404,6 +438,14 @@ class ChatClient(ttk.Frame):
                 except ValueError:
                     pass
                 self.display_message(f"[{timestamp}] {content}", is_system=True)
+                # Check if the system message indicates room deletion
+                if "đã bị người tạo xóa" in content and self.chat_mode == "public" and self.room_id in content:
+                    messagebox.showinfo("Thông báo", f"Phòng chat '{self.room_id}' đã bị người tạo xóa. Bạn sẽ được đưa về màn hình chính.")
+                    self.go_back_to_main()
+                elif "đã được xóa thành công" in content and self.chat_mode == "public" and self.room_id in content and self.username == self.room_creator:
+                    messagebox.showinfo("Thông báo", f"Phòng chat '{self.room_id}' của bạn đã được xóa thành công. Bạn sẽ được đưa về màn hình chính.")
+                    self.go_back_to_main()
+
             else:
                 self.display_message(data, is_system=True)
 
@@ -428,13 +470,13 @@ class ChatClient(ttk.Frame):
     def display_message(self, message, align_right=False, is_system=False, is_private=False):
         self.chat_box.config(state='normal')
         self.chat_box.tag_configure('right', justify='right', background='#DCF8C6', font=('Segoe UI', 10), 
-                                     lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
+                                         lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
         self.chat_box.tag_configure('left', justify='left', background='#EAEAEA', font=('Segoe UI', 10), 
-                                     lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
+                                         lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
         self.chat_box.tag_configure('center', justify='center', foreground='#616161', font=('Segoe UI', 9, 'italic'), 
-                                     lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
+                                         lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
         self.chat_box.tag_configure('private_other', justify='left', background='#FFF3E0', font=('Segoe UI', 10), 
-                                     lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
+                                         lmargin1=10, lmargin2=10, rmargin=10, wrap='word')
 
         if is_private:
             tag = 'right' if align_right else 'private_other'
@@ -476,15 +518,17 @@ class ChatClient(ttk.Frame):
         if not self.socket_closed:
             print("Attempting to safely disconnect socket...") 
             try:
+                # Kiểm tra nếu socket còn đang hoạt động trước khi gửi
                 if self.client.fileno() != -1: 
                     self.client.send("/quit".encode())
                     print("Sent /quit to server.") 
-            except OSError as e: 
+            except OSError as e: # Bắt lỗi cụ thể cho các vấn đề về socket (ví dụ: socket đã đóng)
                 print(f"Warning: Could not send /quit (socket already closed or invalid): {e}")
-            except Exception as e:
+            except Exception as e: # Bắt các lỗi khác
                 print(f"Error sending /quit to server: {e}")
             
             try:
+                # Kiểm tra lại trước khi shutdown/close
                 if self.client.fileno() != -1: 
                     self.client.shutdown(socket.SHUT_RDWR)
                     print("Socket shutdown (SHUT_RDWR).") 
@@ -494,4 +538,28 @@ class ChatClient(ttk.Frame):
             except OSError as e:
                 print(f"Warning: Error during socket shutdown/close (likely already closed): {e}")
             except Exception as e:
-                print(f"Error during socket shutdown/close: {e}")
+                print(f"Error during socket shutdown/close: {e}") 
+
+    def delete_room(self):
+        """Gửi yêu cầu đến server để xóa phòng chat công khai hiện tại."""
+        if self.chat_mode != "public" or not self.room_id:
+            messagebox.showwarning("Cảnh báo", "Bạn chỉ có thể xóa phòng chat công khai.")
+            return
+
+        if self.username != self.room_creator:
+            messagebox.showwarning("Cảnh báo", "Bạn không phải là người tạo phòng này. Bạn không thể xóa nó.")
+            return
+
+        confirm = messagebox.askyesno("Xác nhận xóa phòng", 
+                                     f"Bạn có chắc chắn muốn xóa phòng '{self.room_id}' không?\n"
+                                     "Tất cả lịch sử tin nhắn trong phòng này cũng sẽ bị xóa. Hành động này không thể hoàn tác.")
+        if confirm:
+            try:
+                print(f"Attempting to send DELETE_ROOM command for room: {self.room_id}")
+                self.client.send(f"DELETE_ROOM|{self.room_id}".encode())
+            except Exception as e:
+                messagebox.showerror("Lỗi", f"Không thể gửi yêu cầu xóa phòng: {e}")
+                print(f"Error sending delete room request: {e}")
+                # If there's an error sending the request, assume connection might be lost
+                # and call the connection lost handler.
+                self.on_connection_lost()

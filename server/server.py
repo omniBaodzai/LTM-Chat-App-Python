@@ -7,10 +7,10 @@ import mysql.connector
 HOST = '127.0.0.1'  # IP LAN của bạn
 PORT = 12345
 
-clients = {}       # conn -> (username, room_id or None for private)
+clients = {}        # conn -> (username, room_id or None for private)
 usernames_to_conns = {} # username -> conn (for direct private messaging)
-room_messages = {} # room_id -> list of messages (only for public rooms)
-rooms = {}         # room_id -> list of conn (only for public rooms)
+room_messages = {} # room_id -> list of messages (only for public rooms) - Note: This is in-memory and will be cleared on server restart. Persistence is via DB.
+rooms = {}          # room_id -> list of conn (only for public rooms)
 private_messages = {} # (user1, user2) -> list of messages
 
 def broadcast(message_data, room_id=None, recipient_conn=None):
@@ -97,7 +97,6 @@ def broadcast_online_users_in_room(room_id):
     for client in disconnected_clients:
         remove_client(client) # Remove if disconnected during broadcast
 
-# Thêm hàm này vào server.py
 def get_room_details_from_db(room_name):
     conn = None
     cursor = None
@@ -138,6 +137,59 @@ def get_room_details_from_db(room_name):
             cursor.close()
         if conn and conn.is_connected():
             conn.close()
+
+def delete_room_from_db(room_name, deleter_username):
+    """
+    Deletes a public chat room and its messages from the database.
+    Only the creator can delete the room.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        if conn is None:
+            print("[DB ERROR] Không thể kết nối đến cơ sở dữ liệu.")
+            return False, "Lỗi kết nối cơ sở dữ liệu."
+
+        cursor = conn.cursor()
+
+        # Get room_id and creator_id from the room name
+        cursor.execute("SELECT r.id, r.created_by FROM rooms r JOIN users u ON r.created_by = u.id WHERE r.name = %s", (room_name,))
+        room_info = cursor.fetchone()
+
+        if not room_info:
+            return False, "Phòng không tồn tại."
+        
+        room_id_db = room_info[0]
+        room_creator_id = room_info[1]
+
+        # Get the deleter's user_id
+        cursor.execute("SELECT id FROM users WHERE username = %s", (deleter_username,))
+        deleter_user_id = cursor.fetchone()[0]
+
+        if room_creator_id != deleter_user_id:
+            return False, "Bạn không phải là người tạo phòng này. Bạn không thể xóa nó."
+
+        # Delete messages associated with the room first
+        cursor.execute("DELETE FROM messages WHERE room_id = %s", (room_id_db,))
+        conn.commit()
+
+        # Then delete the room itself
+        cursor.execute("DELETE FROM rooms WHERE id = %s", (room_id_db,))
+        conn.commit()
+        
+        print(f"Phòng '{room_name}' và tất cả tin nhắn đã bị '{deleter_username}' xóa khỏi DB.")
+        return True, "Phòng đã được xóa thành công."
+
+    except mysql.connector.Error as err:
+        print(f"[DB ERROR] Lỗi khi xóa phòng chat '{room_name}': {err}")
+        return False, f"Lỗi cơ sở dữ liệu: {err}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn and conn.is_connected():
+            conn.close()
+
 
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
@@ -188,7 +240,7 @@ def handle_client(conn, addr):
                 
                 if room_id not in rooms:
                     rooms[room_id] = []
-                    room_messages[room_id] = []  # Initialize message history for new room
+                    # room_messages[room_id] = []  # Message history is now primarily handled by DB
                     # Create room in DB if it doesn't exist
                     try:
                         db_conn = get_db_connection()
@@ -200,9 +252,16 @@ def handle_client(conn, addr):
 
                         if user:
                             user_id = user[0]
-                            # Tạo phòng với created_by
-                            cursor.execute("INSERT IGNORE INTO rooms (name, created_by) VALUES (%s, %s)", (room_id, user_id))
-                            db_conn.commit()
+                            # Check if room already exists
+                            cursor.execute("SELECT id FROM rooms WHERE name = %s", (room_id,))
+                            existing_room = cursor.fetchone()
+                            if not existing_room:
+                                # Tạo phòng với created_by
+                                cursor.execute("INSERT INTO rooms (name, created_by) VALUES (%s, %s)", (room_id, user_id))
+                                db_conn.commit()
+                                print(f"[DB] New public room '{room_id}' created by '{username}'.")
+                            else:
+                                print(f"[DB] Public room '{room_id}' already exists. Skipping creation.")
                         else:
                             print(f"[DB WARNING] Không tìm thấy user_id cho username: {username}")
 
@@ -211,7 +270,6 @@ def handle_client(conn, addr):
                     except mysql.connector.Error as err:
                         print(f"[DB ERROR] Lỗi khi tạo phòng chat: {err}")
 
-                
                 rooms[room_id].append(conn)
                 print(f"[ACTIVE] {username} (Public - Room: {room_id}) connected from {addr}")
                 
@@ -220,17 +278,14 @@ def handle_client(conn, addr):
                 
                 # Notify others in the room and update their online list
                 system_msg = f"{username} đã tham gia phòng chat."
-                broadcast(("SYSTEM_MSG_RECV", "system", system_msg, datetime.now().strftime("%H:%M"), system_msg), room_id=room_id)
+                broadcast(("SYSTEM_MSG_RECV", "system", system_msg, datetime.now().strftime("%H:%M:%S"), system_msg), room_id=room_id)
                 broadcast_online_users_in_room(room_id) # Update online users in THIS room
             
             elif chat_mode == "private":
                 print(f"[ACTIVE] {username} (Private) connected from {addr}")
                 # For private chat, notify all other clients that this user is online
                 # and also send the full list of online users to the newly connected private client.
-                system_msg = f"Người dùng {username} đã online."
-                # We need to send this system message to all other *private* chat clients
-                # Or simply rely on the periodic online user list update.
-                # For now, let's just broadcast the updated online list to ALL private clients.
+                # system_msg = f"Người dùng {username} đã online." # This system message is less critical in private chat context
                 broadcast_online_users() # Update all private clients
 
         while True:
@@ -258,7 +313,6 @@ def handle_client(conn, addr):
                     if requested_room_id == room_id:
                         broadcast_online_users_in_room(room_id)
                     continue
-                # Thêm đoạn này vào hàm handle_client
                 elif msg.startswith("GET_ROOM_INFO_AND_USERS|") and chat_mode == "public":
                     parts = msg.split('|', 1)
                     if len(parts) == 2:
@@ -276,8 +330,54 @@ def handle_client(conn, addr):
                         else:
                             print(f"[SERVER] Không tìm thấy thông tin cho phòng '{requested_room_name}'")
                             # Optionally send an error message back to the client
-                    continue # Continue to next message if any
-                # End of new code for GET_ROOM_INFO_AND_USERS
+                    continue
+                # New: Handle DELETE_ROOM command
+                elif msg.startswith("DELETE_ROOM|") and chat_mode == "public":
+                    parts = msg.split('|', 1)
+                    if len(parts) == 2:
+                        room_to_delete = parts[1]
+                        current_username, _ = clients.get(conn, (None, None))
+                        
+                        room_name_db, creator_username_db, _, _ = get_room_details_from_db(room_to_delete)
+
+                        if room_name_db and creator_username_db == current_username:
+                            success, message = delete_room_from_db(room_to_delete, current_username)
+                            if success:
+                                # Notify all users in the deleted room
+                                system_msg_to_room = f"Phòng chat '{room_to_delete}' đã bị người tạo xóa."
+                                # Get a snapshot of clients in the room before modifying 'rooms'
+                                clients_in_deleted_room = list(rooms.get(room_to_delete, []))
+                                
+                                for client_in_room_conn in clients_in_deleted_room:
+                                    broadcast(("SYSTEM_MSG_RECV", "system", system_msg_to_room, datetime.now().strftime("%H:%M:%S"), system_msg_to_room), recipient_conn=client_in_room_conn)
+                                    # Force disconnection for clients in the deleted room
+                                    try:
+                                        client_in_room_conn.send("/quit\n".encode()) # Instruct client to quit
+                                        client_in_room_conn.shutdown(socket.SHUT_RDWR)
+                                        client_in_room_conn.close()
+                                    except Exception as e:
+                                        print(f"Error disconnecting client {clients.get(client_in_room_conn, ('Unknown',))[0]} from deleted room: {e}")
+                                    remove_client(client_in_room_conn) # Remove from server's active clients
+
+                                # Remove the room from in-memory structures
+                                if room_to_delete in rooms:
+                                    del rooms[room_to_delete]
+                                if room_to_delete in room_messages:
+                                    del room_messages[room_to_delete]
+                                
+                                # Notify the deleter that the room was successfully deleted
+                                success_msg_to_deleter = f"Phòng chat '{room_to_delete}' của bạn đã được xóa thành công."
+                                broadcast(("SYSTEM_MSG_RECV", "system", success_msg_to_deleter, datetime.now().strftime("%H:%M:%S"), success_msg_to_deleter), recipient_conn=conn)
+                            else:
+                                error_msg = f"Không thể xóa phòng '{room_to_delete}': {message}"
+                                broadcast(("SYSTEM_MSG_RECV", "system", error_msg, datetime.now().strftime("%H:%M:%S"), error_msg), recipient_conn=conn)
+                        else:
+                            error_msg = f"Bạn không có quyền xóa phòng '{room_to_delete}' hoặc phòng không tồn tại."
+                            broadcast(("SYSTEM_MSG_RECV", "system", error_msg, datetime.now().strftime("%H:%M:%S"), error_msg), recipient_conn=conn)
+                    else:
+                        print(f"[{current_username}] Invalid DELETE_ROOM format: {msg}")
+                    continue
+                # End of new DELETE_ROOM handling
 
                 current_username, current_room_id = clients.get(conn, (None, None))
                 if current_username is None: # Client somehow disconnected or data corrupted
@@ -338,9 +438,11 @@ def handle_client(conn, addr):
         print(f"[DISCONNECTED] {username if username else addr} disconnected.")
         # If it was a public chat client, update room online list
         if chat_mode == "public" and room_id:
-            system_msg = f"{username} đã rời phòng chat."
-            broadcast(("SYSTEM_MSG_RECV", "system", system_msg, datetime.now().strftime("%H:%M"), system_msg), room_id=room_id)
-            broadcast_online_users_in_room(room_id) # Update online users in THIS room
+            # Check if the room still exists (it might have been deleted)
+            if room_id in rooms:
+                system_msg = f"{username} đã rời phòng chat."
+                broadcast(("SYSTEM_MSG_RECV", "system", system_msg, datetime.now().strftime("%H:%M:%S"), system_msg), room_id=room_id)
+                broadcast_online_users_in_room(room_id) # Update online users in THIS room
         # If it was a private chat client, update all private clients' online list
         elif chat_mode == "private":
             broadcast_online_users()
@@ -355,9 +457,8 @@ def remove_client(conn):
             if room_id and room_id in rooms:
                 if conn in rooms[room_id]:
                     rooms[room_id].remove(conn)
-                    if not rooms[room_id]: # If room becomes empty, clear its message history
-                        room_messages.pop(room_id, None)
-                        # Optionally remove room from DB if it becomes empty and no history needed
+                    # We don't remove room_messages directly here as history is DB-managed.
+                    # Room itself is only removed from 'rooms' if it's explicitly deleted by creator.
             
             # Remove from global clients and username mapping
             clients.pop(conn)
@@ -478,7 +579,7 @@ def send_private_message_history(conn, user1_username, user2_username):
             JOIN users u_sender ON pm.sender_id = u_sender.id
             JOIN users u_receiver ON pm.receiver_id = u_receiver.id
             WHERE (pm.sender_id = %s AND pm.receiver_id = %s)
-               OR (pm.sender_id = %s AND pm.receiver_id = %s)
+                OR (pm.sender_id = %s AND pm.receiver_id = %s)
             ORDER BY pm.timestamp ASC
         """, (user1_id, user2_id, user2_id, user1_id))
 
