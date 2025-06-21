@@ -8,7 +8,7 @@ import sys
 import signal
 
 # Assuming HOST and PORT are defined elsewhere or for testing purposes:
-HOST = '192.168.1.16'
+HOST = '172.17.6.136'
 PORT = 12345
 
 class ChatClient(ttk.Frame):
