@@ -1,103 +1,74 @@
-Dưới đây là file `README.md` hoàn chỉnh cho dự án **Chat App Python** của bạn, bao gồm mô tả, cấu trúc thư mục, hướng dẫn cài đặt và sử dụng:
 
----
 
 ```markdown
-# 💬 Chat App Python
+# Chat App Python
 
-Ứng dụng chat thời gian thực sử dụng giao thức TCP, có giao diện GUI bằng Tkinter, xác thực người dùng, quản lý phòng chat, và lưu trữ dữ liệu vào MySQL.
+Ứng dụng chat thời gian thực được xây dựng bằng Python, giao diện GUI với Tkinter, hỗ trợ chat công khai (theo phòng), chat riêng tư giữa các người dùng, và lưu trữ toàn bộ dữ liệu bằng MySQL.
 
 ---
 
-## 🏗️ Cấu trúc thư mục
+## Cấu trúc thư mục
 
 ```
 
 chat\_app/
 ├── client/
-│   ├── **init**.py
-│   ├── chat\_client.py        # Giao diện và xử lý chat
-│   ├── login\_gui.py          # Giao diện đăng nhập / đăng ký
-│   └── config.py             # Kết nối MySQL
+│   ├── config.py             # Cấu hình kết nối MySQL
+│   ├── chat\_client.py        # Giao diện và xử lý client chat (GUI Tkinter)
+│   └── gui\_manager.py        # Giao diện điều hướng, đăng nhập / đăng ký
 │
-├── server/
-│   ├── **init**.py
-│   └── server.py             # Xử lý TCP socket, luồng client
-│
-├── main.py                   # Chạy ứng dụng từ GUI (bắt đầu từ màn hình Start)
-├── requirements.txt          # Danh sách thư viện cần cài
+├── server.py                 # Xử lý logic server, socket, threading, MySQL
+├── chat.sql                  # Cấu trúc CSDL MySQL
+├── main.py                   # Điểm bắt đầu chạy ứng dụng GUI
 └── README.md                 # Tài liệu hướng dẫn
 
 ````
 
 ---
 
-## 🧩 Tính năng chính
+## Tính năng chính
 
-- Giao diện đồ họa đơn giản, dễ dùng với Tkinter.
-- Đăng nhập / đăng ký tài khoản.
-- Quản lý phòng chat bằng mã.
-- Chat nhiều người theo phòng (qua TCP socket).
-- Lưu toàn bộ tin nhắn, tài khoản và phòng vào MySQL.
-- Có thể build thành `.exe` để chạy độc lập trên máy khác.
+- ✅ **Đăng ký / Đăng nhập** có bảo mật bằng SHA-256 (bạn có thể nâng cấp lên bcrypt).
+- ✅ **Chat công khai** theo phòng (người tạo có quyền xóa phòng).
+- ✅ **Chat riêng tư** giữa 2 người dùng.
+- ✅ **Hiển thị trạng thái online/offline** của người dùng.
+- ✅ **Lưu trữ toàn bộ dữ liệu chat** vào MySQL (tin nhắn công khai + riêng tư).
+- ✅ Giao diện GUI hiện đại bằng Tkinter với nhiều tương tác trực quan.
 
 ---
 
-## 🖥️ Cài đặt
+## Cài đặt
 
 ### 1. Cài thư viện cần thiết
+
 ```bash
-pip install -r requirements.txt
+pip install mysql-connector-python
 ````
 
 ---
 
-### 2. Khởi tạo CSDL MySQL
+### 2. Khởi tạo cơ sở dữ liệu
 
-**Tạo CSDL và các bảng:**
+Chạy file SQL `chat.sql`:
 
-```sql
-CREATE DATABASE chat_app1 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE chat_app1;
-
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    username VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE rooms (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    created_by INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE messages (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    room_id INT NOT NULL,
-    user_id INT NOT NULL,
-    content TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
-);
+```bash
+mysql -u root -p < chat.sql
 ```
+
+> CSDL tên là `chat_app1`, bao gồm 4 bảng: `users`, `rooms`, `messages`, `private_messages`.
 
 ---
 
 ### 3. Cấu hình kết nối MySQL
 
-Chỉnh thông tin trong file `client/config.py`:
+Chỉnh lại file `client/config.py`:
 
 ```python
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="your_mysql_password",
+        password="your_password",
         database="chat_app1",
         autocommit=True
     )
@@ -105,37 +76,57 @@ def get_db_connection():
 
 ---
 
-## 🚀 Chạy ứng dụng
+## Cách chạy ứng dụng
 
-### ✅ Chạy Server:
+### Chạy Server:
 
 ```bash
-python server/server.py
+python server.py
 ```
 
-### ✅ Chạy Client GUI:
+> Server sẽ lắng nghe tại `0.0.0.0:12345` (mọi IP trong LAN đều kết nối được).
+
+---
+
+### Chạy Client:
 
 ```bash
 python main.py
 ```
 
+> Giao diện sẽ khởi động từ màn hình chào → đăng nhập / đăng ký → chọn phòng / người dùng để chat.
+
 ---
 
+## Kết nối mạng LAN
 
-
-## 🌐 Kết nối mạng LAN
-
-* Server nên chạy với `HOST = '0.0.0.0'` hoặc IP trong mạng LAN (ví dụ `192.168.1.x`)
-* Các client máy khác dùng IP đó để kết nối.
+* Server đặt `HOST = '0.0.0.0'` để cho phép nhận kết nối từ IP khác.
+* Client phải kết nối tới đúng địa chỉ IP LAN của server (đặt tại `HOST` trong `chat_client.py` và `gui_manager.py`).
 * Mở port `12345` trong firewall nếu bị chặn.
 
 ---
 
-## 📌 Ghi chú
+## Bảo mật
 
-* Dữ liệu người dùng và tin nhắn được lưu trên MySQL.
-* Không hỗ trợ chat riêng tư (private) ở phiên bản này.
-* Có thể mở rộng theo nhóm, thêm emoji, gửi file,...
+* Mật khẩu được **băm SHA256**, không lưu plain text.
+* Có thể nâng cấp lên `bcrypt` để tăng độ bảo mật hơn.
+
 ---
 
+## Tùy chọn nâng cao (Gợi ý mở rộng)
+
+* Gửi file, ảnh, emoji,...
+* Tìm kiếm tin nhắn.
+* Chat nhóm có quyền quản trị.
+* Thông báo đẩy khi có tin mới.
+
+---
+
+## Ghi chú
+
+* Dữ liệu đầy đủ lưu vào MySQL.
+* Mỗi kết nối là một thread server xử lý riêng.
+* Server có thể xử lý đa luồng, nhiều phòng và người dùng đồng thời.
+
+---
 
