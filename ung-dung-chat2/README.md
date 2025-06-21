@@ -1,8 +1,3 @@
-
-
----
-
-```markdown
 # Chat App Python (Tkinter + MySQL)
 
 Ứng dụng chat thời gian thực sử dụng Python với giao diện GUI (Tkinter), hỗ trợ:
@@ -14,13 +9,11 @@
 
 ## Cấu trúc thư mục
 
-```
-
-chat\_app/
+chat_app/
 ├── client/
 │   ├── config.py             # Cấu hình kết nối MySQL
-│   ├── chat\_client.py        # Client giao tiếp socket và GUI Tkinter
-│   └── gui\_manager.py        # Điều hướng giao diện, đăng nhập / đăng ký
+│   ├── chat_client.py        # Client giao tiếp socket và GUI Tkinter
+│   └── gui_manager.py        # Điều hướng giao diện, đăng nhập / đăng ký
 │
 ├── server/
 │   └── server.py             # Xử lý server, socket, threading, MySQL
@@ -28,8 +21,6 @@ chat\_app/
 ├── chat.sql                  # Cấu trúc CSDL MySQL
 ├── main.py                   # Điểm bắt đầu khởi chạy client
 └── README.md                 # Tài liệu hướng dẫn
-
-```
 
 ---
 
@@ -48,21 +39,13 @@ chat\_app/
 
 ### 1. Cài thư viện cần thiết
 
-```
-
 pip install mysql-connector-python
-
-```
 
 ---
 
 ### 2. Tạo cơ sở dữ liệu
 
-```
-
 mysql -u root -p < chat.sql
-
-````
 
 > Tạo database `chat_app1` gồm các bảng:
 > - users
@@ -76,7 +59,6 @@ mysql -u root -p < chat.sql
 
 Sửa file `client/config.py`:
 
-```python
 def get_db_connection():
     return mysql.connector.connect(
         host="localhost",
@@ -85,7 +67,6 @@ def get_db_connection():
         database="chat_app1",
         autocommit=True
     )
-````
 
 ---
 
@@ -93,9 +74,7 @@ def get_db_connection():
 
 ### Chạy server:
 
-```
 python server/server.py
-```
 
 > Server lắng nghe tại `0.0.0.0:12345` để các client trong mạng LAN kết nối được
 
@@ -103,52 +82,35 @@ python server/server.py
 
 ### Chạy client:
 
-```
 python main.py
-```
 
 > Giao diện lần lượt qua:
->
-> * Màn hình chào
-> * Đăng nhập hoặc đăng ký
-> * Giao diện chat
+> - Màn hình chào
+> - Đăng nhập hoặc đăng ký
+> - Giao diện chat
 
 ---
 
 ## Kết nối mạng LAN
 
-* Đặt `HOST = '0.0.0.0'` trong `server.py` để server nhận kết nối từ IP khác
-* Client cần kết nối đúng IP LAN của server trong:
-
-  * `chat_client.py`
-  * `gui_manager.py`
-* Mở port `12345` trong firewall nếu cần
+- Đặt `HOST = '0.0.0.0'` trong `server.py` để server nhận kết nối từ IP khác
+- Client cần kết nối đúng IP LAN của server trong:
+  - `chat_client.py`
+  - `gui_manager.py`
+- Mở port `12345` trong firewall nếu cần
 
 ---
 
 ## Bảo mật
 
-* Mật khẩu được băm bằng SHA-256 trước khi gửi đến server
-* Có thể nâng cấp dùng bcrypt để tăng độ an toàn
-
----
-
-## Gợi ý mở rộng
-
-* Gửi file, ảnh, emoji
-* Tìm kiếm tin nhắn
-* Chat nhóm với quyền quản trị
-* Thông báo khi có tin mới
+- Mật khẩu được băm bằng SHA-256 trước khi gửi đến server
+- Có thể nâng cấp dùng bcrypt để tăng độ an toàn
 
 ---
 
 ## Ghi chú kỹ thuật
 
-* Mỗi client kết nối là một luồng riêng trên server
-* Tin nhắn lưu vào MySQL (cả công khai và riêng tư)
-* Ứng dụng hỗ trợ nhiều người dùng và phòng chat đồng thời
-
----
-
-
+- Mỗi client kết nối là một luồng riêng trên server
+- Tin nhắn lưu vào MySQL (cả công khai và riêng tư)
+- Ứng dụng hỗ trợ nhiều người dùng và phòng chat đồng thời
 
