@@ -162,11 +162,9 @@ class StartScreen(ttk.Frame):
         content_frame.grid(row=1, column=0, sticky="nsew")
         content_frame.columnconfigure(0, weight=1) 
 
-<<<<<<< HEAD
-        ttk.Label(content_frame, text="Chào mừng đến ứng dụng Chat", font=("Arial", 20, "bold")).pack(pady=40)
-=======
+
         ttk.Label(content_frame, text="Chào mừng đến với ứng dụng Chat", font=("Arial", 20, "bold")).pack(pady=40)
->>>>>>> ca328396a3887525adce88c65d35a888066247c1
+
         ttk.Button(content_frame, text="Bắt đầu", width=20, command=lambda: controller.switch_screen(LoginScreen)).pack(pady=10)
 
 
@@ -571,8 +569,5 @@ class ChatPanel(ttk.Frame):
 
 if __name__ == "__main__":
     app = AppController()
-<<<<<<< HEAD
     app.mainloop()
-=======
-    app.mainloop()
->>>>>>> ca328396a3887525adce88c65d35a888066247c1
+
