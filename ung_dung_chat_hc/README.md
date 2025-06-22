@@ -163,8 +163,6 @@ chat_app/
 * Chưa hỗ trợ gửi file hoặc hình ảnh
 * Giao diện cần cải thiện để hỗ trợ tốt hơn cho màn hình độ phân giải cao
 
-```
-
 ---
 
 
